@@ -9,6 +9,7 @@ import org.antlr.v4.runtime.CommonTokenStream;
 import org.antlr.v4.runtime.tree.ParseTreeWalker;
 import org.apache.jena.rdf.model.Model;
 import org.apache.jena.rdf.model.ModelFactory;
+import org.apache.jena.rdf.model.Resource;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -50,15 +51,33 @@ public class ProvenanceProvider {
         VtlLexer lexer = new VtlLexer(stream);
         VtlParser parser = new VtlParser(new CommonTokenStream(lexer));
 
+        logger.debug("Starting search for derivation links in script: '" + script + "'");
         ParseTreeWalker walker = new ParseTreeWalker();
         ProvenanceListener listener = new ProvenanceListener();
         walker.walk(listener, parser.start());
 
-        logger.debug("Links found: " + listener.getLinks());
+        Map<String, List<String>> derivationLinks = listener.getLinks();
+        if (derivationLinks.isEmpty()) {
+            logger.debug("No derivation links found in script");
+            return null;
+        }
+        logger.debug("Derivation links found: " + listener.getLinks());
 
         Model model = ModelFactory.createDefaultModel();
+        derivationLinks.forEach((key, value) -> {
+            Resource derived = model.createResource(getURI(key));
+            logger.debug("Creating 'wasDerivedFrom' statements for resource " + derived.getURI());
+            for (String x : value) {
+                derived.addProperty(PROVO.wasDerivedFrom, model.createResource(getURI(x)));
+            }
+        });
 
         return model;
+    }
+
+    public static String getURI(String variableName) {
+        // Very basic implementation for now. Are VTL variable names URI-safe?
+        return "http://example.org/variable/" + variableName;
     }
 
     // More complicated cases: qualified derivation (https://www.w3.org/TR/prov-o/#qualifiedDerivation)
@@ -69,6 +88,7 @@ public class ProvenanceProvider {
     //           prov:entity :ds2
     //           prov:hadActivity :trevas_execution_123456 ;
     //      ]
+
     // TODO This class should probably not be static
     static class ProvenanceListener extends VtlBaseListener {
 
@@ -89,13 +109,22 @@ public class ProvenanceProvider {
 
             String variable = context.children.get(0).toString();
             logger.debug("Entering varId for variable " + variable);
-            // If no current derived variable is defined, this is the new one
             if (currentDerived == null) {
+                // If no current derived variable is defined, this is the new one
                 currentDerived = variable;
                 links.put(currentDerived, new ArrayList<>());
-            } else links.get(currentDerived).add(variable);
+            } else {
+                // Else the variable is contributes to the current derived variable
+                links.get(currentDerived).add(variable);
+            }
         }
 
+        /**
+         * Returns the derivation links captured by the listener.
+         * Will return an empty map if no links are found.
+         *
+         * @return a map with derived variable names as keys and lists of contributing variables as values.
+         */
         public Map<String, List<String>> getLinks() {
             return links;
         }

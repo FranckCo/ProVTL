@@ -1,7 +1,9 @@
 package fr.insee.test;
 
 import fr.insee.vtl.engine.VtlScriptEngine;
+import fr.insee.vtl.provtl.PROVO;
 import fr.insee.vtl.provtl.ProvenanceProvider;
+import org.apache.jena.rdf.model.Model;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -9,13 +11,14 @@ import javax.script.*;
 
 import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static fr.insee.vtl.provtl.ProvenanceProvider.getURI;
+import static org.junit.jupiter.api.Assertions.*;
 
 public class ProvenanceProviderTest {
 
     private VtlScriptEngine engine;
     private ProvenanceProvider provenanceProvider = new ProvenanceProvider();
+    private Model testModel;
 
     @BeforeEach
     public void setUp() {
@@ -23,11 +26,18 @@ public class ProvenanceProviderTest {
     }
 
     @Test
-    public void testSimpleOverallLineage() throws ScriptException {
+    public void testSimpleOverallLineage() {
 
-        String script = "a := b + 42;";
+        // A script with no assignments has no derivation links
+        // The following script raises an error (mismatched input 'exists_in' expecting {<EOF>, 'define', IDENTIFIER})
+        // Is there a valid VTL script with no assignment?
+        // assertNull(provenanceProvider.getOverallLineage("exists_in(DS_1, DS_2, null);"));
 
-        assertNotNull(provenanceProvider.getOverallLineage(script));
+        testModel = provenanceProvider.getOverallLineage("a := b + c + 42;");
+        assertTrue(testModel.contains(testModel.createResource(getURI("a")), PROVO.wasDerivedFrom));
+
+        // More complex cases to consider:
+        // DS_r := DS_1 [ calc Me_10 := abs(Me_1) ] (line 3517 of reference manual)
     }
 
     @Test
