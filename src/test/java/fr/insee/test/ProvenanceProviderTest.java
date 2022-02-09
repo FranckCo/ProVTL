@@ -35,6 +35,8 @@ public class ProvenanceProviderTest {
 
         testModel = provenanceProvider.getOverallLineage("a := b + c + 42;");
         assertTrue(testModel.contains(testModel.createResource(getURI("a")), PROVO.wasDerivedFrom));
+        testModel = provenanceProvider.getOverallLineage("b := c + 20; a := b + 22;");
+        assertTrue(testModel.contains(testModel.createResource(getURI("b")), PROVO.wasDerivedFrom));
 
         // More complex cases to consider:
         // DS_r := DS_1 [ calc Me_10 := abs(Me_1) ] (line 3517 of reference manual)

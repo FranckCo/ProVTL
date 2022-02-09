@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.UnaryOperator;
 
 public class ProvenanceProvider {
 
@@ -37,11 +38,26 @@ public class ProvenanceProvider {
      * Returns basic lineage information corresponding to a VTL script.
      * The information will only contain derivations from right-side variables
      * to left-side variables.
+     * The default fonction is used to compute the URI of the PROV entities corresponding to the variables.
      *
      * @param script the VTL script
      * @return a Jena model containing the lineage information.
      */
     public Model getOverallLineage(String script) {
+
+        return getOverallLineage(script, ProvenanceProvider::getURI);
+    }
+
+    /**
+     * Returns basic lineage information corresponding to a VTL script.
+     * The information will only contain derivations from right-side variables
+     * to left-side variables.
+     *
+     * @param script the VTL script
+     * @param uriMapper A string unary operator to compute the URI of the PROV entities corresponding to the variables.
+     * @return a Jena model containing the lineage information.
+     */
+    public Model getOverallLineage(String script, UnaryOperator<String> uriMapper) {
 
         // Check if expression is affectation
         // Retrieve left variable and right variables
@@ -65,17 +81,18 @@ public class ProvenanceProvider {
 
         Model model = ModelFactory.createDefaultModel();
         derivationLinks.forEach((key, value) -> {
-            Resource derived = model.createResource(getURI(key));
+            Resource derived = model.createResource(uriMapper.apply(key));
             logger.debug("Creating 'wasDerivedFrom' statements for resource " + derived.getURI());
             for (String x : value) {
-                derived.addProperty(PROVO.wasDerivedFrom, model.createResource(getURI(x)));
+                Resource contributor = model.createResource(uriMapper.apply(x));
+                derived.addProperty(PROVO.wasDerivedFrom, contributor);
             }
         });
 
         return model;
     }
 
-    public static String getURI(String variableName) {
+        public static String getURI(String variableName) {
         // Very basic implementation for now. Are VTL variable names URI-safe?
         return "http://example.org/variable/" + variableName;
     }
@@ -92,9 +109,9 @@ public class ProvenanceProvider {
     // TODO This class should probably not be static
     static class ProvenanceListener extends VtlBaseListener {
 
-        Logger logger = LogManager.getLogger();
+        private static final Logger logger = LogManager.getLogger();
         private String currentDerived;
-        private Map<String, List<String>> links = new HashMap<>();
+        private final Map<String, List<String>> links = new HashMap<>();
 
         @Override
         public void enterTemporaryAssignment(VtlParser.TemporaryAssignmentContext context) {
